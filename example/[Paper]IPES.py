@@ -45,8 +45,9 @@ domain = Grid(bounds, 100)
 domain
 
 # policy choices: PI, EI, UCB, Thompson, PES, IPES
-policy_name = 'IPES'
+policy_name = 'PES'
 
+# pybo.policies simple.py 에 계산식 있음.
 if policy_name == 'PES':
     policy = IndexPolicy(domain, 'PES', {'opes': False, 'ipes': False})
 elif policy_name == 'IPES':
@@ -54,6 +55,7 @@ elif policy_name == 'IPES':
 else:
     policy = IndexPolicy(domain, policy_name)
 
+# pybo recommenders.py 에 계산식 있음.
 recommender = RecPolicy(domain, 'observed')
 
 # get initial data and some test points.
@@ -66,6 +68,7 @@ F = []
 
 # initialize the model
 model = models.make_gp(0.01, 1.9, 0.1, 0)
+model
 
 # set the priors and make the model sample over hyperparameters
 model.params['like']['sn2'].prior = rg.core.priors.Uniform(0.005, 0.015)
@@ -75,6 +78,7 @@ model.params['mean']['bias'].prior = rg.core.priors.Normal(0, 20)
 
 # make a meta-model to sample over models; add data
 model = models.MCMC(model, n=20, skip=True)
+model
 model.add_data(X, Y)
 
 # grab a figure
