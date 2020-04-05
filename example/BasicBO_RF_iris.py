@@ -1,3 +1,4 @@
+#### Setting ####
 %matplotlib inline
 
 import itertools
@@ -20,8 +21,8 @@ from mlxtend.plotting import plot_decision_regions
 import warnings
 warnings.filterwarnings('ignore')
 
-import plotly.graph_objects as go
 
+#### Data ####
 iris = datasets.load_iris()
 X, y = iris.data[:, 0:2], iris.target
 
@@ -31,7 +32,9 @@ iris_plot['target'] = iris_plot['target'].map({0:"setosa", 1:"versicolor",2:"vir
 sns.pairplot(iris_plot,x_vars=["sepal length (cm)"],y_vars=["sepal width (cm)"],hue='target', size = 5)
 
 
-######## 0. Parameters setting
+#### Loss fucntion ####
+import plotly.graph_objects as go
+
 def sample_loss(params):
     return cross_val_score(RandomForestClassifier(random_state=0, n_estimators=int(params[0]), max_depth=int(params[1])),
                             X, y, scoring='accuracy', cv=3).mean()
@@ -56,15 +59,16 @@ fig = go.Figure(data =
         colorscale=colorscale
     ))
 fig.show()
+print("Maximum point is :", param_grid[np.array(real_loss).argmax(), :])
 
 
-######## 1. Baseline
-clf_base = RandomForestClassifier(random_state=0, n_estimators=2, max_depth=5)
+#### Naive model ####
+clf_base = RandomForestClassifier(random_state=0, n_estimators=4, max_depth=1) # 임의 지정 하이퍼파라미터 값
 
 label = ['Base']
 clf_list = [clf_base]
 
-fig = plt.figure(figsize=(10, 8))
+fig = plt.figure(figsize=(40, 10))
 gs = gridspec.GridSpec(1, 3)
 grid = itertools.product([0,1,2],repeat=2)
 
@@ -80,33 +84,70 @@ for clf, label, grd in zip(clf_list, label, grid):
 plt.show()
 
 
-######## 2. Randomized Search
-from scipy.stats import randint
-from sklearn.model_selection import RandomizedSearchCV
+#### Randomized Search ####
+from random import *
 
-def hypertuning_rscv(est, p_distr, nbr_iter,X,y):
-    rdmsearch = RandomizedSearchCV(est, param_distributions=p_distr,
-                                  n_jobs=-1, n_iter=nbr_iter, cv=3)
-    rdmsearch.fit(X,y)
-    ht_params = rdmsearch.best_params_
-    ht_score = rdmsearch.best_score_
-    return ht_params, ht_score
+X1 = randint(1,10)
+X2 = randint(1,10)
+Y = cross_val_score(RandomForestClassifier(random_state=0, n_estimators=int(X1), max_depth=int(X2)),
+                                X, y, scoring='accuracy', cv=3).mean()
+F = 0
 
-clf = RandomForestClassifier(n_jobs=-1)
+set = pd.DataFrame([X1, X2, Y, F]).T
+set.rename(columns={0: 'X1', 1: 'X2', 2: 'Y', 3: 'F'}, inplace=True)
+set
 
-rf_p_dist={'n_estimators':[0,1,3,5,7,9,10,15,20],
-            'max_features':[1,3,5,7,9,10] }
+fig = ez.figure()
 
-rf_parameters = hypertuning_rscv(clf, rf_p_dist, 5, X, y)
-print(rf_parameters)
+n_iters = 10
+for i in range(n_iters):
+    print('Iteration: ' + str(i))
+    # get the recommendation and the next query
+    xbest = set.iloc[set.Y.idxmax(),0:2]
+    X1next = randint(1,10)
+    X2next = randint(1,10)
+    ynext = cross_val_score(RandomForestClassifier(random_state=0, n_estimators=int(X1next), max_depth=int(X2next)), X, y, scoring='accuracy', cv=3).mean()
+    Fnext = cross_val_score(RandomForestClassifier(random_state=0, n_estimators=int(xbest.X1), max_depth=int(xbest.X2)),X, y, scoring='accuracy', cv=3).mean()
+
+    set_next = pd.DataFrame([X1next, X2next, ynext, Fnext]).T
+    set_next.rename(columns={0: 'X1', 1: 'X2', 2: 'Y', 3: 'F'}, inplace=True)
+
+    set = set.append(set_next).reset_index()
+    del set["index"]
+
+    # PLOT EVERYTHING
+    fig.clear()
+    ax1 = ez.subplot2grid((1, 2), (0, 0))
+    ax3 = ez.subplot2grid((1, 2), (0, 1))
+
+    # plot the posterior and data
+    X1, X2 = np.meshgrid(n_estimators, max_depths)
+
+    ax1.contourf(X1, X2, np.array(real_loss).reshape(X1.shape), alpha=0.5)
+    ax1.scatter(np.array(set.X1)[:-1],np.array(set.X2)[:-1], marker='.')
+    ax1.scatter(xbest.X1, xbest.X2, linewidths=3, marker='o', color='r')
+    ax1.scatter(X1next, X2next, linewidths=3, marker='o', color='g')
+    ax1.set_title('current model (xbest and xnext)')
+
+    # plot the latent function at recomended points
+    ax3.axhline(0.7933333333333333)
+    ax3.plot(np.array(set.F))
+    ax3.set_ylim(0., 1)
+    ax3.set_title('Accuracy variation')
+
+    # draw
+    fig.canvas.draw()
+    ez.show(block=False)
+
+print("Best parameter of Random Search:" "\n", "n_estimators:",int(xbest[0]),"\n","max_depth:",int(xbest[1]))
 
 ## fitting
-clf_RS = RandomForestClassifier(random_state=0, n_estimators=5, max_features=1)
+clf_RS = RandomForestClassifier(random_state=0, n_estimators=5, max_depth=6)
 
 label = ['Randomized Search']
 clf_list = [clf_RS]
 
-fig = plt.figure(figsize=(10, 8))
+fig = plt.figure(figsize=(40, 10))
 gs = gridspec.GridSpec(1, 3)
 grid = itertools.product([0,1,2],repeat=2)
 
@@ -121,14 +162,8 @@ for clf, label, grd in zip(clf_list, label, grid):
 
 plt.show()
 
-# 정확도 약 0.1 상승
 
-
-
-
-
-
-######## 3. Entropy Search
+#### Entropy Search ####
 from __future__ import division
 from __future__ import absolute_import
 from __future__ import print_function
@@ -171,10 +206,10 @@ else:
 recommender = RecPolicy(domain, 'observed')
 
 # initialize the model
-model = models.make_gp(0.01, 10, [1., 1.], 0)
+model = models.make_gp(0.02, 10, [1., 1.], 0)
 
 # set the priors and make the model sample over hyperparameters
-model.params['like']['sn2'].prior = rg.core.priors.Uniform(0.05, 0.1)
+model.params['like']['sn2'].prior = rg.core.priors.Uniform(0.1, 0.35)
 model.params['kern']['rho'].prior = rg.core.priors.LogNormal(0, 100)
 model.params['kern']['ell'].prior = rg.core.priors.LogNormal(0, 10)
 model.params['mean']['bias'].prior = rg.core.priors.Normal(0, 20)
@@ -186,7 +221,7 @@ model.add_data(Xs, Y)
 
 fig = ez.figure()
 
-n_iters = 5
+n_iters = 10
 for i in range(n_iters):
     print('Iteration: ' + str(i))
     # get the recommendation and the next query
@@ -234,5 +269,25 @@ for i in range(n_iters):
     fig.canvas.draw()
     ez.show(block=False)
 
+print("Best parameter of Entropy Search:" "\n", "n_estimators:",int(xbest[0]),"\n","max_depth:",int(xbest[1]))
 
-print("Best parameter of Entropy Search:" "\n", x_best)
+## fitting
+clf_ES = RandomForestClassifier(random_state=0, n_estimators=8, max_depth=5)
+
+label = ['Entropy Search']
+clf_list = [clf_ES]
+
+fig = plt.figure(figsize=(40, 10))
+gs = gridspec.GridSpec(1, 3)
+grid = itertools.product([0,1,2],repeat=2)
+
+for clf, label, grd in zip(clf_list, label, grid):
+    scores = cross_val_score(clf, X, y, cv=3, scoring='accuracy')
+    print ("Accuracy: %.2f (+/- %.2f) [%s]" %(scores.mean(), scores.std(), label))
+
+    clf.fit(X, y)
+    ax = plt.subplot(gs[grd[0], grd[1]])
+    fig = plot_decision_regions(X=X, y=y, clf=clf, legend=2)
+    plt.title(label)
+
+plt.show()
